@@ -20,6 +20,9 @@
 5. Bedrock generates the findings.
 6. Streamlit displays the results.
 
+- Bedrock also sends invocation logs to CloudWatch Logs.
+- Bedrock publishes usage and performance metrics to CloudWatch automatically.
+
 - **Frontend:** Streamlit, running locally or on Streamlit Community Cloud.
 - **Backend:** API Gateway, Python 3.13 Lambda, and Amazon Bedrock.
 - **Infrastructure:** Defined in `serverless.yml` using Serverless Framework v4.
@@ -135,6 +138,7 @@ serverless info --stage Prod --aws-profile default
 - The deployment output includes the backend API URL.
 - Use that URL in section 4, step 4, or in the Community Cloud settings below.
 - This command deploys the backend; frontend hosting is configured separately.
+- It also creates and configures the Bedrock logging infrastructure described in section 10.
 
 ## 6. Publish the frontend on Streamlit Community Cloud
 
@@ -170,6 +174,7 @@ python -m unittest discover -s tests -v
 
 - Run from the project root.
 - Tests check input validation, response handling, and model request settings.
+- Tests also check Bedrock logging setup, updates, and safe cleanup.
 - Tests use mocks and do not make AWS calls.
 
 ## 8. Main project files
@@ -178,6 +183,8 @@ python -m unittest discover -s tests -v
 - `Streamlit_UI/requirements.txt`: Frontend Python packages.
 - `lambda_function.py`: Input validation and Bedrock model calls.
 - `serverless.yml`: AWS infrastructure and runtime permissions.
+- `infrastructure/bedrock-logging.yml`: Bedrock log group, roles, and automatic configuration.
+- `infrastructure/bedrock_logging.py`: Stack lifecycle helper for Bedrock logging.
 - `architecture.svg`: Architecture diagram.
 - `tests/`: Regression tests.
 - [SETUP_GUIDE.md](./SETUP_GUIDE.md): Detailed setup commands and common errors.
@@ -194,3 +201,50 @@ python -m unittest discover -s tests -v
 - API Gateway waits up to 29 seconds, while Lambda can run for 123 seconds.
 - Review generated findings against the original logs; model instructions do not
   guarantee factual accuracy.
+
+## 10. Bedrock observability
+
+### What we want to understand
+
+- Which model requests were made and what responses they produced.
+- How many input and output tokens the model used.
+- How model request volume, response time, and errors change over time.
+
+### What we added
+
+- **CloudWatch log group:** `/aws/bedrock/equipment-sme-Prod`, with 30-day retention.
+- **Bedrock delivery role:** Allows Bedrock to write only to its destination log stream.
+- **Configuration helper:** A separate Lambda that enables logging during stack deployment.
+- **Helper IAM role:** Allows configuration changes and passing the dedicated delivery role.
+- **CloudFormation custom resource:** Runs the helper on stack creation, updates, and deletion.
+- **Regression tests:** Check ownership protection, configuration updates, and cleanup.
+- **Architecture diagram:** Shows the Bedrock-to-CloudWatch connection.
+
+### What has been completed
+
+1. Deployed the logging infrastructure into the existing `equipment-sme-Prod` stack.
+2. Confirmed CloudFormation reached `UPDATE_COMPLETE`.
+3. Confirmed text invocation logging is enabled without a manual console setup step.
+4. Sent a synthetic equipment log through the API.
+5. Verified the Bedrock invocation record arrived in CloudWatch with token counts.
+6. Confirmed native invocation, token, and latency metrics are available.
+7. Passed all 14 regression tests at the time of this update.
+
+### How to view logs and metrics
+
+1. For a new environment, deploy the stack using section 5; the current environment is already configured.
+2. Submit a synthetic equipment log through the app.
+3. Open **CloudWatch > Log groups** in `us-east-1`.
+4. Select `/aws/bedrock/equipment-sme-Prod` and inspect the invocation records.
+5. For native metrics, open **CloudWatch > Metrics > AWS/Bedrock** and select Nova Pro.
+
+### Scope and data handling
+
+- Text invocation logging is enabled automatically through the stack.
+- Invocation records include model inputs and outputs; restrict access to these logs.
+- Logging applies to supported text-model invocations across the account in this Region.
+- Logs expire after 30 days; the log group is retained when the stack is deleted.
+- Native token, latency, error, and invocation metrics are published independently of logging.
+- The configuration helper refuses to overwrite another logging destination.
+- Image, audio, video, embedding logging, and S3 delivery are disabled in this configuration.
+- Dashboards, alarms, notifications, and custom application metrics are not included in this update.

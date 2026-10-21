@@ -1,0 +1,79 @@
+Resources:
+  BedrockInvocationLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /aws/bedrock/${self:service}-${sls:stage}
+      RetentionInDays: 30
+
+  BedrockLogDeliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: {Ref: 'AWS::AccountId'}
+              ArnLike:
+                aws:SourceArn:
+                  Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:*
+      Policies:
+        - PolicyName: WriteBedrockInvocationLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource:
+                  Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${BedrockInvocationLogGroup}:log-stream:aws/bedrock/modelinvocations
+
+  BedrockLoggingConfigurationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ConfigureRegionalBedrockLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:GetModelInvocationLoggingConfiguration
+                  - bedrock:PutModelInvocationLoggingConfiguration
+                  - bedrock:DeleteModelInvocationLoggingConfiguration
+                Resource: '*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: {Fn::GetAtt: [BedrockLogDeliveryRole, Arn]}
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: bedrock.amazonaws.com
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource:
+                  Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${self:service}-${sls:stage}-configureBedrockLogging:*
+
+  BedrockInvocationLoggingConfiguration:
+    Type: Custom::BedrockInvocationLogging
+    Properties:
+      ServiceToken: {Fn::GetAtt: [ConfigureBedrockLoggingLambdaFunction, Arn]}
+      ServiceTimeout: 120
+      LogGroupName: {Ref: BedrockInvocationLogGroup}
+      RoleArn: {Fn::GetAtt: [BedrockLogDeliveryRole, Arn]}
+
+Outputs:
+  BedrockInvocationLogGroupName:
+    Description: Bedrock text invocation logs (account-wide in this Region)
+    Value: {Ref: BedrockInvocationLogGroup}

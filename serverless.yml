@@ -22,11 +22,23 @@ provider:
             - arn:aws:bedrock:${aws:region}::foundation-model/amazon.nova-pro-v1:0
 
 package:
+  individually: true
   patterns:
     - '!**'
     - lambda_function.py
 
 functions:
+  configureBedrockLogging:
+    handler: infrastructure.bedrock_logging.handler
+    timeout: 90
+    memorySize: 128
+    logRetentionInDays: 30
+    role:
+      Fn::GetAtt: [BedrockLoggingConfigurationRole, Arn]
+    package:
+      patterns:
+        - '!lambda_function.py'
+        - infrastructure/bedrock_logging.py
   summarize:
     # Keep generated names: existing AWS resources are not imported here.
     handler: lambda_function.lambda_handler
@@ -50,3 +62,5 @@ functions:
             statusCodes:
               200:
                 pattern: ''
+
+resources: ${file(infrastructure/bedrock-logging.yml)}

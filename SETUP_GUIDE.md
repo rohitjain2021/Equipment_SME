@@ -203,6 +203,31 @@ Official references: [Deploy your app](https://docs.streamlit.io/deploy/streamli
 [dependencies](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies),
 and [secrets](https://docs.streamlit.io/develop/concepts/connections/secrets-management).
 
+## 8. Bedrock invocation logging
+
+1. Use the same backend deployment command from step 4; no console setup is needed.
+2. The stack creates a CloudWatch log group, a dedicated Bedrock delivery role,
+   and a small Lambda-backed custom resource that enables text invocation logging.
+3. Submit synthetic equipment logs through the app to create an invocation record.
+4. In `us-east-1`, open **CloudWatch > Log groups > /aws/bedrock/equipment-sme-Prod**.
+5. Allow a few minutes for delivery, then check the log stream for the model request.
+6. View native metrics separately under **CloudWatch > Metrics > AWS/Bedrock**.
+
+- `infrastructure/bedrock-logging.yml` defines the logging resources.
+- `infrastructure/bedrock_logging.py` manages the regional setting on stack create,
+  update, and delete. The application Lambda and frontend do not configure logging.
+- The helper checks existing settings and refuses to overwrite another destination.
+- Text logging includes full prompts and model responses for supported models across
+  the account in this Region. It is not restricted to this application or Nova Pro.
+- Non-text modalities and S3 delivery are disabled by this configuration.
+- Retention is 30 days. Logs remain in the retained log group if the stack is removed;
+  owned regional logging is disabled during successful stack cleanup. A later fresh
+  deployment must account for the retained log-group name rather than recreate it.
+- CloudWatch log ingestion and storage incur charges. Native Bedrock runtime metrics
+  do not require invocation logging to be enabled.
+- Run `python -m unittest discover -s tests -v` to check configuration ownership and
+  cleanup behavior locally without AWS calls.
+
 ## Common errors
 
 | Problem | Fix |
@@ -212,6 +237,7 @@ and [secrets](https://docs.streamlit.io/develop/concepts/connections/secrets-man
 | Community Cloud cannot find the app or dependencies | Verify the selected GitHub branch contains the main file and `requirements.txt` in `Streamlit_UI/`. |
 | `serverless` is not recognized | Install the CLI and reopen the terminal if PATH changed. |
 | Framework asks you to sign in | Run `serverless login` and wait for confirmation in the terminal. |
+| Logging deployment refuses to overwrite a destination | Review the existing regional Bedrock logging configuration; resolve ownership before redeploying. |
 | AWS credentials or permissions error | Check the profile identity and its deployment permissions. |
 | API returns 403 or missing authentication token | Check the API ID, region, exact stage capitalization, and root URL. |
 | API returns 504 | The 29-second integration timeout was exceeded; inspect CloudWatch logs. |
