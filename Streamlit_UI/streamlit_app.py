@@ -258,9 +258,27 @@ with col2:
     prompt = st.text_area(
         "Equipment logs",
         height=120,
-        placeholder="Paste the Equipment Logs...",
+        placeholder="Example: Turbine WT-101 stopped after a gearbox temperature alarm at 105 C.",
         label_visibility="collapsed"
     )
+
+    st.caption(
+        "Describe the equipment and what happened. Include dates, readings, "
+        "maintenance actions, and downtime if known. Plain text is fine; "
+        "leave out details you do not have."
+    )
+    with st.expander("Example equipment log", expanded=True):
+        st.code(
+            "Equipment: Turbine WT-101\n"
+            "Date: 2026-10-21, 10:00\n"
+            "Issue: Gearbox temperature reached 105 C and the turbine stopped.\n"
+            "Observation: The oil filter was clogged.\n"
+            "Action: Replaced the filter; the turbine restarted at 10:20.\n"
+            "Downtime: 20 minutes.\n"
+            "Production loss: Not measured.",
+            language="text"
+        )
+        st.caption("Illustrative data only. Replace it with your actual observations.")
 
     if not API_URL:
         st.info("The analysis service has not been configured yet.")
@@ -272,8 +290,12 @@ with col2:
             with st.spinner("Analyzing equipment data..."):
                 try:
                     result = summarize_logs(prompt.strip())
-                    st.markdown("### Expert Analysis")
-                    st.markdown(result)
+                    if result.startswith("Please provide valid equipment logs"):
+                        st.warning(result)
+                        st.caption("Use the example equipment log above as a guide, then try again.")
+                    else:
+                        st.markdown("### Expert Analysis")
+                        st.markdown(result)
                 except requests.exceptions.Timeout:
                     st.error("The analysis timed out. Please try again.")
                 except requests.exceptions.ConnectionError:
@@ -287,5 +309,6 @@ with col2:
                     st.error("Unable to complete the analysis request.")
                 except ValueError as error:
                     st.error(str(error))
+                    st.caption("Use the example equipment log above as a guide, then try again.")
 
 st.markdown("</div>", unsafe_allow_html=True)
