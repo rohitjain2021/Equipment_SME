@@ -1,7 +1,10 @@
 # Equipment SME
 
-A Streamlit app that summarizes wind turbine equipment logs into five concise
-findings using **Amazon Nova Pro** (`amazon.nova-pro-v1:0`) on Amazon Bedrock.
+A Streamlit app that summarizes wind turbine equipment logs into up to five
+concise findings using **Amazon Nova Pro** (`amazon.nova-pro-v1:0`) on Amazon Bedrock.
+
+Insufficient input such as `zdf` is rejected before inference. The model is
+instructed to decline unrelated text and include only facts supported by the logs.
 
 ## Architecture
 

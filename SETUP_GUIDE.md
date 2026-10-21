@@ -183,7 +183,8 @@ Do not upload virtual environments, `.serverless/`, or actual secret files.
 6. Save the settings and deploy. Community Cloud discovers the requirements
    beside the entrypoint file, installs them, and starts the Streamlit server.
 7. Open the generated `https://<app-name>.streamlit.app` URL and test **Summarize**
-   with synthetic equipment logs. Confirm the five findings appear before sharing.
+   with synthetic equipment logs. Confirm relevant findings appear (up to five),
+   and that insufficient input such as `zdf` shows a validation message.
 
 Set secrets through the hosted app's settings; do not commit them to GitHub.
 If you use a local `.streamlit/secrets.toml`, it is excluded by `.gitignore`.

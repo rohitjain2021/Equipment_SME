@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import requests
 import streamlit as st
@@ -9,18 +10,23 @@ API_URL = os.environ.get("SME_API_URL", "").strip()
 
 def summarize_logs(prompt):
     """Call the configured API and decode its non-proxy Lambda response."""
+    words = re.findall(r"[^\W\d_]+", prompt) if isinstance(prompt, str) else []
+    if len(words) < 2 or sum(len(word) for word in words) < 6:
+        raise ValueError("Please provide valid equipment logs describing an equipment condition or incident.")
     response = requests.post(API_URL, json={"prompt": prompt}, timeout=(5, 35))
     response.raise_for_status()
     payload = response.json()
     if isinstance(payload, dict):
-        if payload.get("statusCode", 200) != 200:
-            raise ValueError("The analysis service could not process these logs.")
         result = payload.get("body")
         if isinstance(result, str):
             try:
                 result = json.loads(result)
             except json.JSONDecodeError:
                 pass
+        if payload.get("statusCode", 200) != 200:
+            if payload.get("statusCode") == 400 and isinstance(result, dict):
+                raise ValueError(result.get("error", "Please provide valid equipment logs."))
+            raise ValueError("The analysis service could not process these logs.")
     else:
         result = payload
     if not isinstance(result, str) or not result.strip():
