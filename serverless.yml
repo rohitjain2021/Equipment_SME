@@ -1,0 +1,52 @@
+service: equipment-sme
+frameworkVersion: '4'
+configValidationMode: error
+
+provider:
+  name: aws
+  runtime: python3.13
+  profile: ${opt:aws-profile, 'default'}
+  region: us-east-1
+  stage: ${opt:stage, 'Prod'}
+  memorySize: 128
+  timeout: 123
+  endpointType: REGIONAL
+  # Omit logRetentionInDays to match the existing log group's indefinite retention.
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - bedrock:InvokeModel
+          Resource:
+            - arn:aws:bedrock:${aws:region}::foundation-model/amazon.nova-pro-v1:0
+
+package:
+  patterns:
+    - '!**'
+    - lambda_function.py
+
+functions:
+  summarize:
+    # Keep generated names: existing AWS resources are not imported here.
+    handler: lambda_function.lambda_handler
+    events:
+      - http:
+          path: /
+          method: post
+          integration: lambda
+          private: false
+          timeoutInMillis: 29000
+          request:
+            contentHandling: CONVERT_TO_TEXT
+            passThrough: WHEN_NO_MATCH
+            template:
+              application/json: >-
+                { "prompt": $input.json('$.prompt') }
+              application/x-www-form-urlencoded: null
+          response:
+            # Preserve the Lambda's complete statusCode/body response envelope.
+            template: $input.body
+            statusCodes:
+              200:
+                pattern: ''

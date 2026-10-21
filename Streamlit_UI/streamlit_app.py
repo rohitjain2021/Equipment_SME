@@ -1,6 +1,32 @@
-import streamlit as st
-import requests
 import json
+import os
+
+import requests
+import streamlit as st
+
+API_URL = os.environ.get("SME_API_URL", "").strip()
+
+
+def summarize_logs(prompt):
+    """Call the configured API and decode its non-proxy Lambda response."""
+    response = requests.post(API_URL, json={"prompt": prompt}, timeout=(5, 35))
+    response.raise_for_status()
+    payload = response.json()
+    if isinstance(payload, dict):
+        if payload.get("statusCode", 200) != 200:
+            raise ValueError("The analysis service could not process these logs.")
+        result = payload.get("body")
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except json.JSONDecodeError:
+                pass
+    else:
+        result = payload
+    if not isinstance(result, str) or not result.strip():
+        raise ValueError("The analysis service returned an unexpected response.")
+    return result.strip()
+
 
 # ---------------------------------------------------------
 # Page configuration
@@ -224,123 +250,36 @@ col1, col2, col3 = st.columns([1, 3, 1])
 
 with col2:
     prompt = st.text_area(
-        "",
+        "Equipment logs",
         height=120,
         placeholder="Paste the Equipment Logs...",
         label_visibility="collapsed"
     )
 
-    if st.button("Summarize"):
+    if not API_URL:
+        st.info("The analysis service has not been configured yet.")
 
-        if prompt.strip():
-
-            with st.spinner("Analyzing equipment data..."):
-
-                try:
-                    # -----------------------------------------
-                    # Call API Gateway / Lambda
-                    # -----------------------------------------
-                    response = requests.post(
-                        "https://ozpc8pljx5.execute-api.us-east-1.amazonaws.com/Prod/",
-                        json={
-                            "prompt": prompt
-                        },
-                        timeout=60
-                    )
-
-                    # -----------------------------------------
-                    # Successful API response
-                    # -----------------------------------------
-                    if response.status_code == 200:
-
-                        response_data = response.json()
-
-                        # Handle Lambda/API Gateway response
-                        if (
-                            isinstance(response_data, dict)
-                            and "body" in response_data
-                        ):
-                            try:
-                                result = json.loads(
-                                    response_data["body"]
-                                )
-                            except (json.JSONDecodeError, TypeError):
-                                result = response_data["body"]
-
-                        else:
-                            result = response_data
-
-                        # Ensure output is a string
-                        result = str(result).strip()
-
-                        # -----------------------------------------
-                        # Fix bullet formatting
-                        # -----------------------------------------
-                        # Handles output like:
-                        # - point 1 - point 2 - point 3
-                        result = result.replace(
-                            " - ",
-                            "\n- "
-                        )
-
-                        # Remove accidental escaped bullet characters
-                        result = result.replace(
-                            "\\- ",
-                            "- "
-                        )
-
-                        # -----------------------------------------
-                        # Display response
-                        # -----------------------------------------
-                        st.markdown(
-                            """
-                            <div class='analysis-title'>
-                                Expert Analysis:
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-
-                        # Important:
-                        # Render model output as Markdown,
-                        # not inside a raw HTML div.
-                        st.markdown(result)
-
-                    # -----------------------------------------
-                    # API error
-                    # -----------------------------------------
-                    else:
-                        st.error(
-                            f"System Error: Unable to process request "
-                            f"(Status: {response.status_code})"
-                        )
-
-                        # Useful during development
-                        if response.text:
-                            st.caption(response.text)
-
-                except requests.exceptions.Timeout:
-                    st.error(
-                        "The request timed out while waiting for the AI service."
-                    )
-
-                except requests.exceptions.ConnectionError:
-                    st.error(
-                        "Unable to connect to the API. "
-                        "Check the API Gateway endpoint and network connection."
-                    )
-
-                except Exception as e:
-                    st.error(
-                        f"Error: {str(e)}"
-                    )
-
+    if st.button("Summarize", disabled=not API_URL):
+        if not prompt.strip():
+            st.warning("Please enter equipment logs to proceed.")
         else:
-            st.warning(
-                "Please enter equipment logs to proceed."
-            )
+            with st.spinner("Analyzing equipment data..."):
+                try:
+                    result = summarize_logs(prompt.strip())
+                    st.markdown("### Expert Analysis")
+                    st.markdown(result)
+                except requests.exceptions.Timeout:
+                    st.error("The analysis timed out. Please try again.")
+                except requests.exceptions.ConnectionError:
+                    st.error("Unable to reach the analysis service. Check your connection.")
+                except requests.exceptions.HTTPError as error:
+                    if error.response.status_code == 504:
+                        st.error("The analysis service timed out. Please try again.")
+                    else:
+                        st.error("The analysis service could not process the request.")
+                except requests.exceptions.RequestException:
+                    st.error("Unable to complete the analysis request.")
+                except ValueError as error:
+                    st.error(str(error))
 
-st.markdown(
-    "</div>",
-    unsafe_allow_html=True
-)
+st.markdown("</div>", unsafe_allow_html=True)

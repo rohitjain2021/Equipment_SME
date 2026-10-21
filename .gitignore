@@ -1,0 +1,13 @@
+# Generated deployment artifacts and dependencies
+.serverless/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local credentials and environment configuration
+.env
+.env.*
+!.env.example
+**/.streamlit/secrets.toml
