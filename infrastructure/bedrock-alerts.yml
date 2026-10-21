@@ -1,0 +1,66 @@
+Parameters:
+  AlertEmail:
+    Type: String
+    NoEcho: true
+    Description: Email address for invocation notifications; confirm the SNS email.
+    AllowedPattern: '[^\s@]+@[^\s@]+\.[^\s@]+'
+
+Resources:
+  BedrockInvocationAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ${self:service}-${sls:stage}-bedrock-invocations
+      DisplayName: Equipment SME Bedrock invocation alerts
+
+  BedrockInvocationEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: {Ref: BedrockInvocationAlertTopic}
+      Protocol: email
+      Endpoint: {Ref: AlertEmail}
+
+  BedrockNotificationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PublishBedrockInvocationAlerts
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: {Ref: BedrockInvocationAlertTopic}
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource:
+                  Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${self:service}-${sls:stage}-notifyBedrockInvocation:*
+
+  BedrockLogsInvokeNotifierPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: {Fn::GetAtt: [NotifyBedrockInvocationLambdaFunction, Arn]}
+      Action: lambda:InvokeFunction
+      Principal:
+        Fn::Sub: logs.${AWS::Region}.${AWS::URLSuffix}
+      SourceAccount: {Ref: 'AWS::AccountId'}
+      SourceArn: {Fn::GetAtt: [BedrockInvocationLogGroup, Arn]}
+
+  BedrockInvocationSubscriptionFilter:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: BedrockLogsInvokeNotifierPermission
+    Properties:
+      LogGroupName: {Ref: BedrockInvocationLogGroup}
+      FilterPattern: '{ $.modelId = "amazon.nova-pro-v1:0" }'
+      DestinationArn: {Fn::GetAtt: [NotifyBedrockInvocationLambdaFunction, Arn]}
+
+Outputs:
+  BedrockInvocationAlertTopicArn:
+    Description: SNS topic for each recorded Nova Pro invocation
+    Value: {Ref: BedrockInvocationAlertTopic}

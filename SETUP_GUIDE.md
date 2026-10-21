@@ -71,6 +71,7 @@ in `serverless.yml`. Verify Nova Pro model access in Amazon Bedrock.
 ### Install Serverless Framework and sign in
 
 ```powershell
+$env:ALERT_EMAIL = Read-Host 'Email address for Bedrock invocation notifications'
 npm install --global serverless@4
 serverless --version
 serverless login
@@ -227,6 +228,27 @@ and [secrets](https://docs.streamlit.io/develop/concepts/connections/secrets-man
   do not require invocation logging to be enabled.
 - Run `python -m unittest discover -s tests -v` to check configuration ownership and
   cleanup behavior locally without AWS calls.
+
+## 9. Per-invocation email notifications
+
+1. Set `ALERT_EMAIL` using the private local prompt in step 4 before packaging or deploying.
+2. Deploy the existing stack. The email is passed as a CloudFormation `NoEcho`
+   parameter; it is not stored in source files. Do not share resolved deployment
+   output or generated `.serverless` files, which can contain parameter values.
+3. Find the **AWS Notification - Subscription Confirmation** email and select
+   **Confirm subscription**. Check spam if it does not appear.
+4. Submit synthetic equipment logs to generate a Nova Pro invocation.
+5. Wait for the Bedrock log delivery and the corresponding SNS notification.
+
+- The path is Bedrock invocation logs -> notifier Lambda -> SNS -> confirmed email.
+- The CloudWatch Logs filter selects `amazon.nova-pro-v1:0`; other models are ignored.
+- Emails contain invocation metadata and token counts, not prompts or model output.
+- The subscription processes new records delivered after deployment, not historical logs.
+- Delivery is asynchronous and at least once; delays or duplicate emails can occur.
+- A notification is not an abuse detector and does not cap AWS spending.
+- Invalid input rejected before Bedrock does not produce an invocation email.
+- Keep `ALERT_EMAIL` set in the terminal when deploying future changes.
+- No threshold alarms or automatic shutdown are configured by this feature.
 
 ## Common errors
 

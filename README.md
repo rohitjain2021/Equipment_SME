@@ -43,6 +43,7 @@
 - Node.js 22 LTS and npm.
 - Serverless Framework v4 and a Serverless account.
 - AWS deployment permissions and Nova Pro model access in `us-east-1`.
+- An email address for SNS invocation notifications; confirmation is required.
 
 ## 4. Clone and run locally
 
@@ -115,6 +116,7 @@ npm install --global serverless@4
 ### Step 2: Sign in and verify your AWS identity
 
 ```powershell
+$env:ALERT_EMAIL = Read-Host 'Email address for Bedrock invocation notifications'
 serverless login
 aws sts get-caller-identity --profile default
 ```
@@ -122,6 +124,11 @@ aws sts get-caller-identity --profile default
 - Complete the browser sign-in and wait for confirmation in the terminal.
 - Check that the AWS command shows the intended account.
 - Replace `default` in every command if you use a different profile.
+- Set `ALERT_EMAIL` before each deployment, or supply `--param="alertEmail=<EMAIL>"`.
+- Keep the real email private; it is passed through a CloudFormation `NoEcho` parameter.
+- No recipient address is hardcoded in the application or infrastructure templates.
+- For CI/CD, supply `ALERT_EMAIL` through the pipeline's secret store.
+- Generated deployment files can contain the resolved email; `.serverless/` stays out of Git.
 
 ### Step 3: Review, package, and deploy
 
@@ -185,6 +192,8 @@ python -m unittest discover -s tests -v
 - `serverless.yml`: AWS infrastructure and runtime permissions.
 - `infrastructure/bedrock-logging.yml`: Bedrock log group, roles, and automatic configuration.
 - `infrastructure/bedrock_logging.py`: Stack lifecycle helper for Bedrock logging.
+- `infrastructure/bedrock-alerts.yml`: SNS topic, email subscription, and log subscription.
+- `infrastructure/bedrock_notifications.py`: Sends metadata-only notifications for recorded model calls.
 - `architecture.svg`: Architecture diagram.
 - `tests/`: Regression tests.
 - [SETUP_GUIDE.md](./SETUP_GUIDE.md): Detailed setup commands and common errors.
@@ -228,7 +237,7 @@ python -m unittest discover -s tests -v
 4. Sent a synthetic equipment log through the API.
 5. Verified the Bedrock invocation record arrived in CloudWatch with token counts.
 6. Confirmed native invocation, token, and latency metrics are available.
-7. Passed all 14 regression tests at the time of this update.
+7. Passed all 20 regression tests, including invocation notification checks.
 
 ### How to view logs and metrics
 
@@ -247,4 +256,23 @@ python -m unittest discover -s tests -v
 - Native token, latency, error, and invocation metrics are published independently of logging.
 - The configuration helper refuses to overwrite another logging destination.
 - Image, audio, video, embedding logging, and S3 delivery are disabled in this configuration.
-- Dashboards, alarms, notifications, and custom application metrics are not included in this update.
+- Dashboards, threshold alarms, and custom application metrics are not included.
+
+## 11. Bedrock invocation email notifications
+
+1. Set `ALERT_EMAIL` privately and deploy using section 5.
+2. Open the SNS confirmation email and select **Confirm subscription**.
+3. Submit a valid equipment log through the app.
+4. After Bedrock delivers its log record, the notifier publishes a message to SNS.
+5. Check your email for the request ID, timestamp, model, and token counts.
+
+- A CloudWatch Logs subscription selects Nova Pro invocation records.
+- A dedicated notifier Lambda publishes one message per matching record to SNS.
+- Emails contain no equipment logs, prompts, model responses, or caller identities.
+- Notifications cover recorded Nova Pro calls in the regional Bedrock log group,
+  including calls from other applications using this model.
+- This is a per-invocation notification, not a threshold alarm or spending limit.
+- Notification delivery can be delayed and retries can produce duplicates.
+- Unconfirmed email subscriptions do not receive invocation notifications.
+- `NoEcho` masks the stack parameter; authorized SNS users can still view the subscription address.
+- SNS publishes, notifier execution, and log processing incur usage charges.

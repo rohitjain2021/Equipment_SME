@@ -11,6 +11,9 @@ provider:
   memorySize: 128
   timeout: 123
   endpointType: REGIONAL
+  stackParameters:
+    - ParameterKey: AlertEmail
+      ParameterValue: ${param:alertEmail, env:ALERT_EMAIL}
   # Omit logRetentionInDays to match the existing log group's indefinite retention.
   iam:
     role:
@@ -28,6 +31,20 @@ package:
     - lambda_function.py
 
 functions:
+  notifyBedrockInvocation:
+    handler: infrastructure.bedrock_notifications.handler
+    timeout: 30
+    memorySize: 128
+    logRetentionInDays: 30
+    role:
+      Fn::GetAtt: [BedrockNotificationRole, Arn]
+    environment:
+      ALERT_TOPIC_ARN: {Ref: BedrockInvocationAlertTopic}
+      BEDROCK_MODEL_ID: amazon.nova-pro-v1:0
+    package:
+      patterns:
+        - '!lambda_function.py'
+        - infrastructure/bedrock_notifications.py
   configureBedrockLogging:
     handler: infrastructure.bedrock_logging.handler
     timeout: 90
@@ -63,4 +80,6 @@ functions:
               200:
                 pattern: ''
 
-resources: ${file(infrastructure/bedrock-logging.yml)}
+resources:
+  - ${file(infrastructure/bedrock-logging.yml)}
+  - ${file(infrastructure/bedrock-alerts.yml)}
