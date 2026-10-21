@@ -184,7 +184,7 @@ Do not upload virtual environments, `.serverless/`, or actual secret files.
    beside the entrypoint file, installs them, and starts the Streamlit server.
 7. Open the generated `https://<app-name>.streamlit.app` URL and test **Summarize**
    with synthetic equipment logs. Confirm relevant findings appear (up to five),
-   and that insufficient input such as `zdf` shows a validation message.
+   and that input without a meaningful equipment description shows a validation message.
 
 Set secrets through the hosted app's settings; do not commit them to GitHub.
 If you use a local `.streamlit/secrets.toml`, it is excluded by `.gitignore`.

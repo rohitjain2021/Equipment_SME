@@ -1,87 +1,196 @@
 # Equipment SME
 
-A Streamlit app that summarizes wind turbine equipment logs into up to five
-concise findings using **Amazon Nova Pro** (`amazon.nova-pro-v1:0`) on Amazon Bedrock.
+## 1. What the app does
 
-Insufficient input such as `zdf` is rejected before inference. The model is
-instructed to decline unrelated text and include only facts supported by the logs.
+- Summarizes wind turbine equipment logs into **up to five findings**.
+- Uses **Amazon Nova Pro** (`amazon.nova-pro-v1:0`) through Amazon Bedrock.
+- Provides a Streamlit interface for entering logs and viewing results.
+- Shows an example log to help users enter useful information.
+- Rejects input that is too short to describe a meaningful equipment condition before calling the model.
+- Instructs the model to decline unrelated text and use only facts from the logs.
 
-## Architecture
-
-```text
-Streamlit UI (local or Community Cloud) -> API Gateway -> Lambda -> Amazon Bedrock
-```
+## 2. How it works
 
 ![Equipment SME solution architecture](./architecture.svg)
 
-The UI sends a JSON `prompt` to `POST /` on the API's `Prod` stage. API Gateway
-maps it to `event["prompt"]`; Lambda calls Bedrock and returns the summary.
-Infrastructure is defined in `serverless.yml` using Serverless Framework v4.
+1. The user enters equipment logs in the Streamlit app.
+2. Streamlit sends the logs to Amazon API Gateway.
+3. API Gateway passes the prompt to AWS Lambda.
+4. Lambda sends the prompt to Amazon Bedrock.
+5. Bedrock generates the findings.
+6. Streamlit displays the results.
 
-## Clone and run locally
+- **Frontend:** Streamlit, running locally or on Streamlit Community Cloud.
+- **Backend:** API Gateway, Python 3.13 Lambda, and Amazon Bedrock.
+- **Infrastructure:** Defined in `serverless.yml` using Serverless Framework v4.
 
-Install Git and Python 3.13 or another Python version supported by Streamlit.
-You also need a deployed backend URL, supplied by the project owner or obtained
-by following the [setup and deployment guide](./SETUP_GUIDE.md).
+## 3. What you need
 
-Run these commands in **PowerShell**:
+### To run the frontend locally
+
+- Git.
+- Python 3.13, or another Python version supported by Streamlit.
+- The URL of a deployed backend API.
+- A terminal using **Windows PowerShell** for the commands below.
+
+### To deploy your own AWS backend
+
+- An AWS account and a configured AWS CLI profile.
+- AWS CLI v2.
+- Node.js 22 LTS and npm.
+- Serverless Framework v4 and a Serverless account.
+- AWS deployment permissions and Nova Pro model access in `us-east-1`.
+
+## 4. Clone and run locally
+
+- Run the following steps in order.
+- If you do not have a backend URL, complete section 5 before step 4 below.
+
+### Step 1: Clone the repository
 
 ```powershell
 git clone https://github.com/rohitjain2021/Equipment_SME.git
 cd Equipment_SME
+```
+
+### Step 2: Create a Python environment
+
+```powershell
 python -m venv .venv
+```
+
+### Step 3: Install the packages
+
+```powershell
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r .\Streamlit_UI\requirements.txt
+```
+
+- Use this environment's Python for all local app commands.
+- You do not need to activate the environment separately.
+
+### Step 4: Set the backend URL
+
+```powershell
 $env:SME_API_URL = 'https://<API_ID>.execute-api.us-east-1.amazonaws.com/Prod/'
+```
+
+- Replace `<API_ID>` with the API ID from your deployment.
+- Use the full URL ending in `/Prod/`.
+- Set this variable again whenever you open a new terminal.
+- No AWS credentials are needed by the frontend for the current API.
+
+### Step 5: Start the app
+
+```powershell
 .\.venv\Scripts\python.exe -m streamlit run .\Streamlit_UI\streamlit_app.py
 ```
 
-Replace `<API_ID>` with your deployment's API ID. Open **http://localhost:8501**,
-paste equipment logs, and select **Summarize**. Stop the server with `Ctrl+C`.
-Start it through `python -m streamlit run`, not `python streamlit_app.py`.
+1. Open **http://localhost:8501**.
+2. Enter equipment logs, using the displayed example as a guide.
+3. Select **Summarize**.
+4. Review the findings.
+5. Press `Ctrl+C` in the terminal to stop the server.
 
-No AWS credentials are needed to run the UI against the current unauthenticated
-API. The UI runs locally; inference runs in AWS and incurs AWS usage charges.
+- Start the app with `python -m streamlit run`, not `python streamlit_app.py`.
+- Local startup still uses the AWS backend for each analysis.
 
-## Backend deployment
+## 5. Deploy the AWS backend
 
-Backend deployment needs an AWS CLI profile, Node.js 22 LTS, and Serverless
-Framework v4 authentication. From the project root after setup:
+- Skip this section if you already have a working backend URL.
+- Run these commands from the project root.
+- Use an existing AWS profile, or configure one locally before continuing.
+- See the [setup guide](./SETUP_GUIDE.md#4-get-a-backend-url-or-deploy-your-own)
+  for AWS profile setup and required permissions.
+
+### Step 1: Install Serverless Framework
 
 ```powershell
-serverless deploy --stage Prod --aws-profile default
+npm install --global serverless@4
 ```
 
-The first deployment creates the `equipment-sme-Prod` CloudFormation stack in
-`us-east-1`; subsequent deployments update that stack. It does not automatically
-adopt manually created resources. This deploys the backend, not frontend hosting.
-See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for prerequisites, deployment, testing,
-restarting the local server, and common errors.
+### Step 2: Sign in and verify your AWS identity
 
-## Host the frontend on Streamlit Community Cloud
+```powershell
+serverless login
+aws sts get-caller-identity --profile default
+```
 
-Push the updated frontend and its `requirements.txt` to GitHub, then create an
-app at [Streamlit Community Cloud](https://share.streamlit.io/). Select repository
-`rohitjain2021/Equipment_SME`, branch `main`, and main file
-`Streamlit_UI/streamlit_app.py`. In **Advanced settings**, select Python 3.13
-and set the root-level secret `SME_API_URL` to your deployed backend URL.
+- Complete the browser sign-in and wait for confirmation in the terminal.
+- Check that the AWS command shows the intended account.
+- Replace `default` in every command if you use a different profile.
 
-Community Cloud installs the dependencies and provides a shareable
-`https://<app-name>.streamlit.app` URL. The AWS backend stays in AWS. Follow
-[step 7 in the setup guide](./SETUP_GUIDE.md#7-host-the-frontend-on-streamlit-community-cloud)
-for the full publishing steps and the secrets format.
+### Step 3: Review, package, and deploy
 
-## Project files
+```powershell
+serverless print --stage Prod --aws-profile default
+serverless package --stage Prod --aws-profile default
+serverless deploy --stage Prod --aws-profile default
+serverless info --stage Prod --aws-profile default
+```
 
-| File | Purpose |
-| --- | --- |
-| `Streamlit_UI/streamlit_app.py` | Streamlit frontend for local or cloud hosting |
-| `Streamlit_UI/requirements.txt` | Frontend Python dependencies |
-| `lambda_function.py` | Lambda handler and Bedrock invocation |
-| `serverless.yml` | Backend infrastructure and permissions |
-| `SETUP_GUIDE.md` | Step-by-step setup and deployment commands |
+- The first deployment creates stack **`equipment-sme-Prod`** in **`us-east-1`**.
+- Later deployments update the same stack.
+- Manually created AWS resources are not automatically imported.
+- The deployment output includes the backend API URL.
+- Use that URL in section 4, step 4, or in the Community Cloud settings below.
+- This command deploys the backend; frontend hosting is configured separately.
 
-Keep AWS credentials, Serverless tokens, and live API URLs out of documentation
-and commits. The current API has no authentication; add an authorizer before
-restricting access to approved users. Generated `.serverless` files and local
-virtual environments are excluded from Git.
+## 6. Publish the frontend on Streamlit Community Cloud
+
+1. Commit and push the frontend and `Streamlit_UI/requirements.txt` to GitHub.
+2. Sign in to [Streamlit Community Cloud](https://share.streamlit.io/).
+3. Select **Create app** and choose the existing GitHub app option.
+4. Set the repository to `rohitjain2021/Equipment_SME`.
+5. Select branch `main` and main file `Streamlit_UI/streamlit_app.py`.
+6. Choose an available app subdomain, or accept the generated one.
+7. Open **Advanced settings** and select Python **3.13**.
+8. Add the following root-level value under **Secrets**, using your real API ID:
+
+```toml
+SME_API_URL = "https://<API_ID>.execute-api.us-east-1.amazonaws.com/Prod/"
+```
+
+9. Save the settings and deploy.
+10. Open the generated `https://<app-name>.streamlit.app` URL.
+11. Test with valid logs and with invalid input before sharing the app.
+
+- Keep `SME_API_URL` outside any TOML section such as `[settings]`.
+- Community Cloud installs the frontend packages and starts the server.
+- The backend continues running in AWS.
+- Push frontend updates to the selected GitHub branch to update the hosted app.
+- Follow [section 7 of the setup guide](./SETUP_GUIDE.md#7-host-the-frontend-on-streamlit-community-cloud)
+  for detailed publishing steps.
+
+## 7. Run the regression tests
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+- Run from the project root.
+- Tests check input validation, response handling, and model request settings.
+- Tests use mocks and do not make AWS calls.
+
+## 8. Main project files
+
+- `Streamlit_UI/streamlit_app.py`: Streamlit frontend.
+- `Streamlit_UI/requirements.txt`: Frontend Python packages.
+- `lambda_function.py`: Input validation and Bedrock model calls.
+- `serverless.yml`: AWS infrastructure and runtime permissions.
+- `architecture.svg`: Architecture diagram.
+- `tests/`: Regression tests.
+- [SETUP_GUIDE.md](./SETUP_GUIDE.md): Detailed setup commands and common errors.
+
+## 9. Security and usage notes
+
+- Keep AWS credentials and Serverless tokens out of code, Git, and documentation.
+- Enter the live backend URL through an environment variable or hosted app secrets.
+- Keep local `.streamlit/secrets.toml` files private; they are excluded from Git.
+- Generated `.serverless` files and virtual environments are excluded from Git.
+- The current API has no authentication; anyone with its URL can call it.
+- Add API authentication to limit access to approved users.
+- AWS requests incur usage charges, including requests made through a local UI.
+- API Gateway waits up to 29 seconds, while Lambda can run for 123 seconds.
+- Review generated findings against the original logs; model instructions do not
+  guarantee factual accuracy.
