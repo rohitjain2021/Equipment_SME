@@ -13,6 +13,11 @@
 
 ![Equipment SME solution architecture](./architecture.svg)
 
+- **Top row:** Application request and response flow.
+- **Middle row:** Bedrock logs flow right to left through CloudWatch, the notifier, SNS, and email.
+- **Bottom panel:** Infrastructure deployment and scoped IAM permissions.
+- [Open the full-size architecture diagram](./architecture.svg).
+
 1. The user enters equipment logs in the Streamlit app.
 2. Streamlit sends the logs to Amazon API Gateway.
 3. API Gateway passes the prompt to AWS Lambda.
