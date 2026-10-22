@@ -34,281 +34,94 @@ def summarize_logs(prompt):
     return result.strip()
 
 
-# ---------------------------------------------------------
-# Page configuration
-# ---------------------------------------------------------
-st.set_page_config(
-    page_title="Wind Turbine SME Assistant | Enterprise",
-    page_icon="⚡",
-    layout="wide"
-)
+EXAMPLE_LOG = """Equipment: Turbine WT-101
+Date: 2026-10-21, 10:00
+Issue: Gearbox temperature reached 105 C and the turbine stopped.
+Observation: The oil filter was clogged.
+Action: Replaced the filter; the turbine restarted at 10:20.
+Downtime: 20 minutes.
+Production loss: Not measured."""
 
-# ---------------------------------------------------------
-# Custom CSS
-# ---------------------------------------------------------
+
+def load_example():
+    st.session_state.equipment_logs = EXAMPLE_LOG
+    st.session_state.pop("analysis", None)
+    st.session_state.pop("analyzed_prompt", None)
+
+
+def clear_workspace():
+    st.session_state.equipment_logs = ""
+    st.session_state.pop("analysis", None)
+    st.session_state.pop("analyzed_prompt", None)
+
+
+st.set_page_config(page_title="Equipment SME", page_icon="🌬", layout="centered")
 st.markdown(
     """
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-        * {
-            font-family: 'Inter', sans-serif;
-        }
-
-        .main {
-            background-color: #f8fafc;
-        }
-
-        .stTextArea textarea {
-            font-size: 15px;
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
-            padding: 12px;
-        }
-
-        .stTextArea textarea:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .stButton button {
-            background-color: #3b82f6;
-            color: white;
-            border-radius: 8px;
-            padding: 10px 32px;
-            font-weight: 600;
-            border: none;
-            transition: all 0.2s;
-            font-size: 15px;
-        }
-
-        .stButton button:hover {
-            background-color: #2563eb;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
-
-        .header-container {
-            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-            padding: 40px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-        }
-
-        .header-title {
-            color: white;
-            font-size: 2.5em;
-            font-weight: 700;
-            margin: 0;
-            letter-spacing: -0.5px;
-        }
-
-        .header-subtitle {
-            color: #dbeafe;
-            font-size: 1.1em;
-            margin-top: 8px;
-            font-weight: 500;
-        }
-
-        .metric-card {
-            background: white;
-            padding: 24px;
-            border-radius: 10px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid;
-            transition: all 0.2s;
-        }
-
-        .metric-card:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            transform: translateY(-2px);
-        }
-
-        .metric-icon {
-            font-size: 2.5em;
-            margin-bottom: 8px;
-        }
-
-        .metric-title {
-            color: #1e293b;
-            font-size: 1em;
-            font-weight: 600;
-            margin: 0;
-        }
-
-        .metric-desc {
-            color: #64748b;
-            font-size: 0.85em;
-            margin-top: 4px;
-        }
-
-        .card1 {
-            border-left-color: #3b82f6;
-        }
-
-        .card2 {
-            border-left-color: #10b981;
-        }
-
-        .card3 {
-            border-left-color: #8b5cf6;
-        }
-
-        .query-section {
-            background: white;
-            padding: 32px;
-            border-radius: 10px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin: 20px 0;
-        }
-
-        .section-label {
-            color: #1e293b;
-            font-size: 0.95em;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .analysis-title {
-            color: #1e293b;
-            font-size: 1em;
-            font-weight: 600;
-            margin-top: 24px;
-            margin-bottom: 10px;
-        }
+    .block-container { max-width: 850px; padding-top: 2.5rem; }
+    h1 { letter-spacing: -1px; }
+    [data-testid="stTextArea"] textarea { border-radius: 10px; font-size: 15px; line-height: 1.6; }
+    [data-testid="stButton"] button { border-radius: 8px; }
+    [data-testid="stButton"] button[kind="primary"] { background: #087f75; border-color: #087f75; color: white; }
+    [data-testid="stButton"] button[kind="primary"]:hover { background: #06675f; border-color: #06675f; }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------
-# Header
-# ---------------------------------------------------------
-st.markdown(
-    """
-    <div class='header-container'>
-        <div class='header-title'>
-            ⚡ Wind Turbine Equipment SME Assistant
-        </div>
-        <div class='header-subtitle'>
-            Enterprise AI-Powered Expert System for Predictive Maintenance & Downtime Reduction
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
+st.title("Equipment Log Assistant")
+st.write("Enter your wind turbine logs to get a simple summary.")
+
+example_col, clear_col, _ = st.columns([1, 1, 2])
+example_col.button("Load example", on_click=load_example, use_container_width=True)
+clear_col.button("Clear", on_click=clear_workspace, use_container_width=True)
+
+prompt = st.text_area(
+    "Equipment logs",
+    key="equipment_logs",
+    height=240,
+    placeholder="Describe the equipment, what happened, and any action taken.",
 )
+st.caption("Describe the issue and any action taken. Select Load example if you need help getting started.")
 
-# ---------------------------------------------------------
-# Metric cards
-# ---------------------------------------------------------
-metric_col1, metric_col2, metric_col3 = st.columns(3)
+if not API_URL:
+    st.info("The analysis service has not been configured yet.")
 
-with metric_col1:
-    st.markdown(
-        """
-        <div class='metric-card card1'>
-            <div class='metric-icon'>🔧</div>
-            <div class='metric-title'>Equipment Diagnostics</div>
-            <div class='metric-desc'>Real-time fault detection</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+if st.button("Analyze", type="primary", disabled=not API_URL, use_container_width=True):
+    st.session_state.pop("analysis", None)
+    st.session_state.pop("analyzed_prompt", None)
+    if not prompt.strip():
+        st.warning("Enter equipment logs or select Load example to get started.")
+    else:
+        with st.spinner("Analyzing your logs..."):
+            try:
+                result = summarize_logs(prompt.strip())
+                if result.startswith("Please provide valid equipment logs"):
+                    st.warning(result)
+                    st.caption("Select Load example to see the expected format.")
+                else:
+                    st.session_state.analysis = result
+                    st.session_state.analyzed_prompt = prompt.strip()
+            except requests.exceptions.Timeout:
+                st.error("The analysis timed out. Please try again.")
+            except requests.exceptions.ConnectionError:
+                st.error("Unable to reach the analysis service. Check your connection.")
+            except requests.exceptions.HTTPError as error:
+                if error.response is not None and error.response.status_code == 504:
+                    st.error("The analysis service timed out. Please try again.")
+                else:
+                    st.error("The analysis service could not process the request.")
+            except requests.exceptions.RequestException:
+                st.error("Unable to complete the analysis request.")
+            except ValueError as error:
+                st.error(str(error))
+                st.caption("Select Load example to see the expected format.")
 
-with metric_col2:
-    st.markdown(
-        """
-        <div class='metric-card card2'>
-            <div class='metric-icon'>⏱️</div>
-            <div class='metric-title'>Reduce Downtime</div>
-            <div class='metric-desc'>Minimize operational losses</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with metric_col3:
-    st.markdown(
-        """
-        <div class='metric-card card3'>
-            <div class='metric-icon'>🤖</div>
-            <div class='metric-title'>AI-Powered Insights</div>
-            <div class='metric-desc'>Predictive maintenance</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-# ---------------------------------------------------------
-# Query section
-# ---------------------------------------------------------
-st.markdown(
-    "<div class='query-section'>",
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    "<div class='section-label'>Equipment Query</div>",
-    unsafe_allow_html=True
-)
-
-col1, col2, col3 = st.columns([1, 3, 1])
-
-with col2:
-    prompt = st.text_area(
-        "Equipment logs",
-        height=120,
-        placeholder="Example: Turbine WT-101 stopped after a gearbox temperature alarm at 105 C.",
-        label_visibility="collapsed"
-    )
-
-    st.caption(
-        "Describe the equipment and what happened. Include dates, readings, "
-        "maintenance actions, and downtime if known. Plain text is fine; "
-        "leave out details you do not have."
-    )
-    with st.expander("Example equipment log", expanded=True):
-        st.code(
-            "Equipment: Turbine WT-101\n"
-            "Date: 2026-10-21, 10:00\n"
-            "Issue: Gearbox temperature reached 105 C and the turbine stopped.\n"
-            "Observation: The oil filter was clogged.\n"
-            "Action: Replaced the filter; the turbine restarted at 10:20.\n"
-            "Downtime: 20 minutes.\n"
-            "Production loss: Not measured.",
-            language="text"
-        )
-        st.caption("Illustrative data only. Replace it with your actual observations.")
-
-    if not API_URL:
-        st.info("The analysis service has not been configured yet.")
-
-    if st.button("Summarize", disabled=not API_URL):
-        if not prompt.strip():
-            st.warning("Please enter equipment logs to proceed.")
-        else:
-            with st.spinner("Analyzing equipment data..."):
-                try:
-                    result = summarize_logs(prompt.strip())
-                    if result.startswith("Please provide valid equipment logs"):
-                        st.warning(result)
-                        st.caption("Use the example equipment log above as a guide, then try again.")
-                    else:
-                        st.markdown("### Expert Analysis")
-                        st.markdown(result)
-                except requests.exceptions.Timeout:
-                    st.error("The analysis timed out. Please try again.")
-                except requests.exceptions.ConnectionError:
-                    st.error("Unable to reach the analysis service. Check your connection.")
-                except requests.exceptions.HTTPError as error:
-                    if error.response.status_code == 504:
-                        st.error("The analysis service timed out. Please try again.")
-                    else:
-                        st.error("The analysis service could not process the request.")
-                except requests.exceptions.RequestException:
-                    st.error("Unable to complete the analysis request.")
-                except ValueError as error:
-                    st.error(str(error))
-                    st.caption("Use the example equipment log above as a guide, then try again.")
-
-st.markdown("</div>", unsafe_allow_html=True)
+if "analysis" in st.session_state:
+    st.divider()
+    st.subheader("Summary")
+    if prompt.strip() != st.session_state.get("analyzed_prompt"):
+        st.warning("Your logs have changed. Select Analyze to update the summary.")
+    st.markdown(st.session_state.analysis)
+    st.caption("AI-generated summary. Verify the findings against your original records.")
