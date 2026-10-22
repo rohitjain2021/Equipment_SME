@@ -1,5 +1,7 @@
 # Equipment SME
 
+**Live demo:** [Try the Equipment Log Assistant](https://equipment-sme-assistant.streamlit.app/)
+
 ## 1. What the app does
 
 - Summarizes wind turbine equipment logs into **up to five findings**.
