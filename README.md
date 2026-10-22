@@ -1,6 +1,8 @@
 # Equipment SME
 
-**Live demo:** [Try the Equipment Log Assistant](https://equipment-sme-assistant.streamlit.app/)
+## `Live Demo`
+
+[Open the Equipment Log Assistant](https://equipment-sme-assistant.streamlit.app/)
 
 ## 1. What the app does
 
