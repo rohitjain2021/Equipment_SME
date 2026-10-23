@@ -1,0 +1,52 @@
+Resources:
+  EquipmentGuardrail:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      Name: ${self:service}-${sls:stage}-equipment-logs
+      Description: Input safety and grounded summaries for wind turbine equipment logs.
+      BlockedInputMessaging: Please provide wind turbine equipment logs describing the issue, observations, and actions taken.
+      BlockedOutputsMessaging: The summary could not be verified against the supplied equipment logs.
+      ContentPolicyConfig:
+        FiltersConfig:
+          - {Type: HATE, InputStrength: HIGH, OutputStrength: HIGH}
+          - {Type: INSULTS, InputStrength: MEDIUM, OutputStrength: MEDIUM}
+          - {Type: SEXUAL, InputStrength: HIGH, OutputStrength: HIGH}
+          - {Type: VIOLENCE, InputStrength: MEDIUM, OutputStrength: MEDIUM}
+          - {Type: MISCONDUCT, InputStrength: HIGH, OutputStrength: HIGH}
+          - {Type: PROMPT_ATTACK, InputStrength: HIGH, OutputStrength: NONE}
+      TopicPolicyConfig:
+        TopicsConfig:
+          - Name: UnrelatedRequests
+            Type: DENY
+            Definition: Requests for entertainment, general trivia, recipes, travel, shopping, politics, personal advice, or unrelated coding tasks instead of reporting wind turbine equipment conditions or maintenance observations.
+            Examples:
+              - Write a movie review.
+              - Recommend a holiday destination.
+              - Explain how to cook pasta.
+              - Write a sorting algorithm in Python.
+          - Name: FabricatedEquipmentFindings
+            Type: DENY
+            Definition: Requests to fabricate turbine incidents, readings, IDs, maintenance actions, downtime, or causes that are absent from the supplied equipment logs, or to disregard the source logs and invent findings.
+            Examples:
+              - Invent five turbine incidents with made-up dates and readings.
+              - Ignore the logs and make up a cause for the failure.
+      ContextualGroundingPolicyConfig:
+        FiltersConfig:
+          - {Type: GROUNDING, Threshold: 0.75}
+          - {Type: RELEVANCE, Threshold: 0.7}
+
+  # Guardrail versions are immutable snapshots. For policy updates, change this
+  # logical ID (e.g. EquipmentGuardrailVersionV2) and its reference in serverless.yml.
+  EquipmentGuardrailVersionV1:
+    Type: AWS::Bedrock::GuardrailVersion
+    Properties:
+      GuardrailIdentifier: {Fn::GetAtt: [EquipmentGuardrail, GuardrailId]}
+      Description: v1 - equipment log safety and source grounding.
+
+Outputs:
+  EquipmentGuardrailId:
+    Description: Guardrail used by the equipment analysis Lambda.
+    Value: {Fn::GetAtt: [EquipmentGuardrail, GuardrailId]}
+  EquipmentGuardrailVersion:
+    Description: Published immutable guardrail version.
+    Value: {Fn::GetAtt: [EquipmentGuardrailVersionV1, Version]}

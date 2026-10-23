@@ -17,6 +17,13 @@ MESSAGE = "Please provide valid equipment logs describing an equipment condition
 class InputValidationTests(unittest.TestCase):
     def setUp(self):
         self.bedrock = Mock()
+        self.bedrock.apply_guardrail.return_value = {"action": "NONE"}
+        self.environment = patch.dict("os.environ", {
+            "BEDROCK_GUARDRAIL_ID": "testguardrail",
+            "BEDROCK_GUARDRAIL_VERSION": "1",
+        })
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
         self.bedrock.invoke_model.return_value = {
             "body": io.BytesIO(json.dumps({
                 "output": {"message": {"content": [{"text": "- Motor failed."}]}}
@@ -77,6 +84,18 @@ class InputValidationTests(unittest.TestCase):
             "statusCode": 200, "body": json.dumps("- Motor failed.")
         }
         self.assertEqual(self.summarize("Motor failed."), "- Motor failed.")
+
+    def test_guardrail_and_service_errors_are_shown_without_summary(self):
+        for status, message in (
+            (422, "The summary could not be verified against your logs."),
+            (503, "The analysis service is temporarily unavailable."),
+        ):
+            with self.subTest(status=status):
+                self.post.return_value.json.return_value = {
+                    "statusCode": status, "body": json.dumps({"error": message})
+                }
+                with self.assertRaisesRegex(ValueError, re.escape(message)):
+                    self.summarize("Turbine gearbox overheated.")
 
     def test_model_insufficient_input_message_is_preserved(self):
         self.post.return_value.json.return_value = {

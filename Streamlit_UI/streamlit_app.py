@@ -24,7 +24,7 @@ def summarize_logs(prompt):
             except json.JSONDecodeError:
                 pass
         if payload.get("statusCode", 200) != 200:
-            if payload.get("statusCode") == 400 and isinstance(result, dict):
+            if payload.get("statusCode") in (400, 422, 503) and isinstance(result, dict):
                 raise ValueError(result.get("error", "Please provide valid equipment logs."))
             raise ValueError("The analysis service could not process these logs.")
     else:

@@ -23,6 +23,10 @@ provider:
             - bedrock:InvokeModel
           Resource:
             - arn:aws:bedrock:${aws:region}::foundation-model/amazon.nova-pro-v1:0
+        - Effect: Allow
+          Action: bedrock:ApplyGuardrail
+          Resource:
+            Fn::GetAtt: [EquipmentGuardrail, GuardrailArn]
 
 package:
   individually: true
@@ -59,6 +63,9 @@ functions:
   summarize:
     # Keep generated names: existing AWS resources are not imported here.
     handler: lambda_function.lambda_handler
+    environment:
+      BEDROCK_GUARDRAIL_ID: {Fn::GetAtt: [EquipmentGuardrail, GuardrailId]}
+      BEDROCK_GUARDRAIL_VERSION: {Fn::GetAtt: [EquipmentGuardrailVersionV1, Version]}
     events:
       - http:
           path: /
@@ -83,3 +90,4 @@ functions:
 resources:
   - ${file(infrastructure/bedrock-logging.yml)}
   - ${file(infrastructure/bedrock-alerts.yml)}
+  - ${file(infrastructure/bedrock-guardrails.yml)}

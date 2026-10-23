@@ -17,7 +17,10 @@
 
 ![Equipment SME solution architecture](./architecture.svg)
 
-- **Top row:** Application request and response flow.
+- **Diagram status:** Bedrock Guardrails are implemented locally and await deployment and live verification.
+- **Top row:** Existing application request and response flow.
+- **Dashed green panel:** Input/output guardrail checks awaiting deployment, with contextual grounding against the supplied logs. The application Lambda handles blocked results.
+- Equipment scope still relies on input validation and the system prompt; denied topics are not a strict allowlist.
 - **Middle row:** Bedrock logs flow right to left through CloudWatch, the notifier, SNS, and email.
 - **Bottom panel:** Infrastructure deployment and scoped IAM permissions.
 - [Open the full-size architecture diagram](./architecture.svg).
@@ -285,3 +288,92 @@ python -m unittest discover -s tests -v
 - Unconfirmed email subscriptions do not receive invocation notifications.
 - `NoEcho` masks the stack parameter; authorized SNS users can still view the subscription address.
 - SNS publishes, notifier execution, and log processing incur usage charges.
+
+
+## 12. Bedrock Guardrails
+
+- **Status:** Implemented locally; not deployed or tested against the live guardrail yet.
+- **Purpose:** Help keep summaries safe, relevant, and grounded in wind turbine equipment logs.
+
+### What is a guardrail?
+
+- A guardrail is a set of checks applied to user input and model output.
+- It can block content that violates configured rules or a summary that is not supported by the source logs.
+- It does not train Nova Pro or make it a wind turbine specialist. The system prompt defines the task; the guardrail adds checks around it.
+
+### Content filters configured
+
+| Filter | Input strength | Output strength | What it checks |
+| --- | --- | --- | --- |
+| `HATE` | HIGH | HIGH | Hateful or discriminatory content. |
+| `INSULTS` | MEDIUM | MEDIUM | Insulting or bullying language. |
+| `SEXUAL` | HIGH | HIGH | Sexual content. |
+| `VIOLENCE` | MEDIUM | MEDIUM | Violent or threatening content. |
+| `MISCONDUCT` | HIGH | HIGH | Content involving wrongdoing or harmful conduct. |
+| `PROMPT_ATTACK` | HIGH | NONE | Input attempts to override instructions or bypass the rules. This filter is not applied to output. |
+
+- Higher strength increases filtering and can also block legitimate content. Test real maintenance language before production use.
+
+### Topic and grounding settings
+
+| Setting | Configured value | What it does |
+| --- | --- | --- |
+| `UnrelatedRequests` | DENY | Helps block requests for entertainment, travel, recipes, general trivia, and other listed topics outside equipment log analysis. |
+| `FabricatedEquipmentFindings` | DENY | Helps block requests to invent incidents, readings, IDs, actions, downtime, or causes. |
+| `GROUNDING` threshold | 0.75 | Blocks summaries with a grounding score below 0.75 when compared with the supplied logs. |
+| `RELEVANCE` threshold | 0.70 | Blocks summaries with a relevance score below 0.70 when compared with the fixed summarization task. |
+
+- Scores are guardrail assessments, not a percentage guarantee of factual accuracy.
+- Denied topics do not cover every possible unrelated request. The equipment-specific system prompt remains part of the scope control.
+
+### How the application supplies the checks
+
+| Parameter | Value or source | Purpose |
+| --- | --- | --- |
+| `guardrailIdentifier` | `BEDROCK_GUARDRAIL_ID`, supplied by CloudFormation | Selects this application's guardrail without a hardcoded ID. |
+| `guardrailVersion` | Published version from `BEDROCK_GUARDRAIL_VERSION` | Uses a fixed policy snapshot; the application rejects missing versions and `DRAFT`. |
+| `source` | `INPUT`, then `OUTPUT` | Checks the user logs before inference and the summary afterward. |
+| `grounding_source` | Original equipment logs | Provides the reference facts for the output check. |
+| `query` | Fixed wind turbine summarization instruction | Defines what the summary should answer. |
+| `guard_content` | User input or generated summary | Identifies the text being evaluated. |
+| Guardrail `action` | `NONE` or `GUARDRAIL_INTERVENED` | Continues only on `NONE`; an intervention blocks the request or summary. Unexpected results also stop processing. |
+
+### How it works
+
+1. Lambda rejects missing, very short, and oversized input before AWS calls.
+2. `ApplyGuardrail` checks input for harmful content, prompt attacks, and denied topics.
+3. Allowed input is sent to Nova Pro with the equipment-specific system prompt.
+4. `ApplyGuardrail` checks the summary, using the original logs as the grounding source and a fixed summarization query.
+5. Only an allowed summary is returned. Blocked requests receive guidance; failed checks withhold the result.
+
+### Infrastructure and deployment
+
+1. Review `infrastructure/bedrock-guardrails.yml` for content filters and denied topics.
+2. Initial thresholds are **0.75 grounding** and **0.70 relevance**; tune them using representative equipment logs.
+3. Deploy using section 5. The existing stack creates the guardrail and an immutable published version.
+4. CloudFormation supplies `BEDROCK_GUARDRAIL_ID` and `BEDROCK_GUARDRAIL_VERSION` to the application Lambda; do not hardcode them.
+5. The application role can call `bedrock:ApplyGuardrail` only on this guardrail. No additional Lambda is created.
+6. Deployment credentials need guardrail create, update, get, delete, version creation, and tagging permissions in addition to existing stack permissions.
+7. After changing a policy, change the version resource logical ID (for example, `EquipmentGuardrailVersionV2`) and its reference in `serverless.yml` so the stack publishes a new snapshot.
+
+### Verification after deployment
+
+1. Submit the example wind turbine log and verify the summary preserves its facts.
+2. Submit an unrelated request and verify the app asks for equipment logs.
+3. Submit instructions to ignore the source logs and invent readings; verify they are declined.
+4. Evaluate summaries against the source logs to tune grounding and relevance thresholds, including legitimate incident and injury reports that might trigger content filters.
+5. Check that guardrail failures do not return unchecked model output.
+
+### Limits and behavior
+
+- Domain restrictions combine input validation, denied topics, and the system prompt. Denied topics are not a complete allowlist or a factual-accuracy guarantee.
+- Missing configuration, invalid published versions, or failed guardrail calls stop processing rather than bypass the checks.
+- Logs are limited to **8,000 characters** per request; the evaluated summary is limited to **5,000 characters**.
+- The backend keeps its existing API response envelope; the UI displays safe input, grounding, and service error messages.
+- Guardrail calls add latency and usage charges. The existing API Gateway integration timeout remains 29 seconds; verify end-to-end latency after deployment.
+- Requests blocked before model invocation do not generate a Nova Pro invocation email. A model call whose summary is later blocked can still generate an invocation email.
+- Guardrail traces and source content are not printed by the application. Existing Bedrock invocation logging still records model inputs and outputs.
+- No PII masking policy is included in this initial version.
+- Run `python -B -m unittest discover -s tests -v` for mocked integration checks. These tests verify application behavior, not live AWS policy classification.
+
+- References: [ApplyGuardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-independent-api.html), [contextual grounding](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-contextual-grounding-check.html), [CloudFormation guardrail versions](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-bedrock-guardrailversion.html).
