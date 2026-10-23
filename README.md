@@ -17,9 +17,9 @@
 
 ![Equipment SME solution architecture](./architecture.svg)
 
-- **Diagram status:** Bedrock Guardrails are implemented locally and await deployment and live verification.
+- **Diagram status:** Bedrock Guardrails are deployed.
 - **Top row:** Existing application request and response flow.
-- **Dashed green panel:** Input/output guardrail checks awaiting deployment, with contextual grounding against the supplied logs. The application Lambda handles blocked results.
+- **Green panel:** Deployed input/output guardrail checks, with contextual grounding against the supplied logs. The application Lambda handles blocked results.
 - Equipment scope still relies on input validation and the system prompt; denied topics are not a strict allowlist.
 - **Middle row:** Bedrock logs flow right to left through CloudWatch, the notifier, SNS, and email.
 - **Bottom panel:** Infrastructure deployment and scoped IAM permissions.
@@ -292,7 +292,7 @@ python -m unittest discover -s tests -v
 
 ## 12. Bedrock Guardrails
 
-- **Status:** Implemented locally; not deployed or tested against the live guardrail yet.
+- **Status:** Deployed. Use the verification steps below to evaluate live behavior and response time.
 - **Purpose:** Help keep summaries safe, relevant, and grounded in wind turbine equipment logs.
 
 ### What is a guardrail?
